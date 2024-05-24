@@ -7,8 +7,8 @@ use std::{
 };
 
 use freetype::freetype::{
-    FT_Done_Face, FT_Face, FT_Get_Char_Index, FT_Load_Char, FT_Load_Glyph, FT_New_Face,
-    FT_Render_Glyph, FT_Set_Char_Size, FT_LOAD_COLOR, FT_LOAD_NO_BITMAP, FT_LOAD_RENDER,
+    FT_Done_Face, FT_Face, FT_Get_Char_Index, FT_Get_Kerning, FT_Load_Glyph, FT_New_Face,
+    FT_Render_Glyph, FT_Set_Char_Size, FT_Vector_, FT_LOAD_NO_BITMAP,
 };
 use freetype::freetype::{FT_Pixel_Mode_, FT_Render_Mode};
 
@@ -254,6 +254,26 @@ impl FontFace {
         }
     }
 
+    fn get_kerning(&mut self, char: char, previous_char: char) -> Result<(i64, i64), i32> {
+        let mut vector = FT_Vector_ { x: 0, y: 0 };
+
+        let err = unsafe {
+            let previous_glyph_index = FT_Get_Char_Index(self.raw_ptr, previous_char.into());
+            let current_glyph_index = FT_Get_Char_Index(self.raw_ptr, char.into());
+
+            FT_Get_Kerning(
+                self.raw_ptr,
+                previous_glyph_index,
+                current_glyph_index,
+                0, /* FT_KERNING_DEFAULT */
+                &mut vector,
+            )
+        };
+
+        println!("kering = {}", (vector).x);
+        error_if_not_zero!(err, ((vector).x, (vector).y))
+    }
+
     /// Measure size of rendered string
     fn measure_size_without_lock(&mut self, str: &str) -> Result<StringBitmapSize, i32> {
         let mut ymin = 0;
@@ -261,7 +281,12 @@ impl FontFace {
         let mut pen_x = 0;
         let mut last_char_width = 0;
         let mut last_horizontal_advance = 0;
+        let mut previous_char = None;
         for char in str.chars() {
+            if let Some(previous_char) = previous_char {
+                pen_x += self.get_kerning(char, previous_char).unwrap().0;
+            }
+
             self.load_glpyh(char)?;
             let metrics = unsafe { (*(*self.raw_ptr).glyph).metrics };
             let height = metrics.height;
@@ -273,6 +298,7 @@ impl FontFace {
 
             last_horizontal_advance = advance.x;
             last_char_width = metrics.width;
+            previous_char = Some(char);
         }
 
         let width = pen_x/* - last_horizontal_advance + last_char_width */;
@@ -307,7 +333,15 @@ impl FontFace {
         let mut pen_x: i64 = 0;
         let mut pen_y = 0;
 
+        let mut previous_char = None;
+
         for char in str.chars() {
+            if let Some(previous_char) = previous_char {
+                println!("kerning before: {}", pen_x);
+                pen_x += self.get_kerning(char, previous_char).unwrap().0 >> 6;
+                println!("after: {}", pen_x);
+            }
+
             self.render_glpyh(char)?;
             let bitmap = unsafe { (*(*self.raw_ptr).glyph).bitmap };
             let has_alpha = bitmap.pixel_mode != (FT_Pixel_Mode_::FT_PIXEL_MODE_BGRA) as u8;
@@ -365,6 +399,8 @@ impl FontFace {
             let advance = unsafe { (*(*self.raw_ptr).glyph).advance };
             pen_x += advance.x >> 6;
             pen_y += advance.y >> 6;
+
+            previous_char = Some(char);
         }
 
         Ok(result)
