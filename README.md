@@ -1,9 +1,9 @@
 # FreeType example in rust
 This is a [FreeType](https://freetype.org) Simple text rendering, with kerning(untested), example in rust language.
 
-Originally, I was making it to use in a game,<a href="footnote-1" id="ref-footnote-1">[1]</a> for font rendering with less ownership/borrowing problem. but after finding out that kerning with OpenType GPOS was not supported, I got fed up and just released it.
+Originally, I was making it to use in a game,<a href="#footnote-1" id="ref-footnote-1">[1]</a> for font rendering with less ownership/borrowing problem. but after finding out that kerning with OpenType GPOS was not supported, I got fed up and just released it.
 
-<span id="footnote-1"><a href="ref-footnote-1">[1]</a> I and my friends used sdl2-ttf. But, TTF feature of [rust-sdl2](https://github.com/Rust-SDL2/rust-sdl2) caused ownership/borrowing problems, driving me and the friends crazy.</span>
+<span id="footnote-1"><a href="#ref-footnote-1">[1]</a> I and my friends used sdl2-ttf. But, TTF feature of [rust-sdl2](https://github.com/Rust-SDL2/rust-sdl2) caused ownership/borrowing problems, driving me and the friends crazy.</span>
 
 ## (Korean) Rust로 작성한 FreeType 예시
 [FreeType](https://freetype.org) 라이브러리를 이용해 간단한 텍스트를 렌더링하는 예시입니다. (테스트는 안해봤지만 커닝도 합니다.)
