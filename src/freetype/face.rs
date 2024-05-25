@@ -56,6 +56,10 @@ pub struct FontFace {
     hdpi: u32,
     /// Font size in pt
     font_size: f32,
+    /// Letter spacing
+    ///
+    /// more bigger value, more narrower between letters
+    letter_spacing: f64,
 
     /// Counter of cloned instances and the original
     counter: Arc<AtomicU8>,
@@ -88,6 +92,7 @@ impl Clone for FontFace {
             font_size: self.font_size.clone(),
             counter: self.counter.clone(),
             render_mutex: self.render_mutex.clone(),
+            letter_spacing: self.letter_spacing.clone(),
         }
     }
 }
@@ -101,6 +106,7 @@ impl FontFace {
             vdpi: 72,
             hdpi: 72,
             font_size: 20.0,
+            letter_spacing: 1.2,
             counter: Arc::new(AtomicU8::new(1)),
             render_mutex: Arc::new(Mutex::new(false)),
         };
@@ -202,7 +208,7 @@ impl FontFace {
             ymax = std::cmp::max(ymax, horizontal_bearing_y);
             let scale =
                 unsafe { (shape.scale as f64) / (*(*self.raw_ptr).size).metrics.x_ppem as f64 }
-                    * 1.2;
+                    * self.letter_spacing;
             pen_x += (shape.x_advance as f64 / scale) as i64;
         }
 
@@ -305,7 +311,7 @@ impl FontFace {
 
             let scale =
                 unsafe { (shape.scale as f64) / (*(*self.raw_ptr).size).metrics.x_ppem as f64 }
-                    * 1.2;
+                    * self.letter_spacing;
             let (x_advance, y_advance) = {
                 (
                     (shape.x_advance as f64 / scale) as i64,
@@ -317,5 +323,9 @@ impl FontFace {
         }
 
         Ok(result)
+    }
+
+    pub fn set_letter_spacing(&mut self, letter_spacing: f64) {
+        self.letter_spacing = letter_spacing;
     }
 }

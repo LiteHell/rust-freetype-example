@@ -33,12 +33,21 @@ impl Font {
 
         self.freetype_font.measure_size(shapes.as_slice())
     }
+
     pub fn set_dpi(&mut self, hdpi: u32, vdpi: u32) {
         self.freetype_font.set_dpi(hdpi, vdpi);
     }
+
     pub fn set_font_size(&mut self, pt: f32) {
         self.freetype_font.set_font_size(pt);
         let (x_ppem, y_ppem) = self.freetype_font.get_ppem().expect("Failed to get ppem");
         self.harfbuzz_font.set_ppem(x_ppem, y_ppem);
+    }
+
+    /// More bigger value, less space between letters
+    ///
+    /// Default value is 1.2
+    pub fn set_letter_spacing(&mut self, spacing: f64) {
+        self.freetype_font.set_letter_spacing(spacing);
     }
 }
