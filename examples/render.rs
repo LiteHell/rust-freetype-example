@@ -1,5 +1,5 @@
 use clap::Parser;
-use freetype_example::font::Font;
+use freetyper::font::Font;
 
 /// Rendering example
 #[derive(Parser, Debug)]

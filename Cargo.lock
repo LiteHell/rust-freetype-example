@@ -434,16 +434,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "freetype-example"
-version = "0.1.0"
-dependencies = [
- "clap",
- "freetype",
- "harfbuzz-sys",
- "image",
-]
-
-[[package]]
 name = "freetype-sys"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -452,6 +442,16 @@ dependencies = [
  "cc",
  "libc",
  "pkg-config",
+]
+
+[[package]]
+name = "freetyper"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "freetype",
+ "harfbuzz-sys",
+ "image",
 ]
 
 [[package]]
