@@ -7,60 +7,17 @@ use std::{
 };
 
 use freetype::freetype::{
-    FT_Done_Face, FT_Face, FT_Get_Char_Index, FT_Get_Kerning, FT_Load_Glyph, FT_New_Face,
-    FT_Render_Glyph, FT_Set_Char_Size, FT_Vector_, FT_LOAD_NO_BITMAP,
+    FT_Done_Face, FT_Face, FT_Load_Glyph, FT_New_Face, FT_Render_Glyph, FT_Set_Char_Size,
+    FT_LOAD_NO_BITMAP,
 };
 use freetype::freetype::{FT_Pixel_Mode_, FT_Render_Mode};
 
-use crate::init_freetype;
+use crate::{
+    bitmap::{StringBitmap, StringBitmapSize},
+    harfbuzz::shape::Shape,
+};
 
-/// Measured size of string bitmap
-#[derive(Clone, Copy)]
-pub struct StringBitmapSize {
-    pub width: u64,
-    pub height: u64,
-    y_min: u64,
-    y_max: u64,
-}
-
-// Rendered string bitmap
-pub struct StringBitmap {
-    pub r: Vec<u8>,
-    pub g: Vec<u8>,
-    pub b: Vec<u8>,
-    pub a: Vec<u8>,
-    pub size: StringBitmapSize,
-}
-
-impl StringBitmap {
-    pub(crate) fn new(size: StringBitmapSize) -> StringBitmap {
-        StringBitmap {
-            r: vec![0; (size.width * size.height).try_into().expect("Too big")],
-            g: vec![0; (size.width * size.height).try_into().expect("Too big")],
-            b: vec![0; (size.width * size.height).try_into().expect("Too big")],
-            a: vec![0; (size.width * size.height).try_into().expect("Too big")],
-            size: size.clone(),
-        }
-    }
-
-    pub(crate) fn set_rgba(&mut self, x: i64, y: i64, rgba: (u8, u8, u8, u8)) {
-        let pos = self.get_pos(x, y);
-
-        self.r[pos] = rgba.0;
-        self.g[pos] = rgba.1;
-        self.b[pos] = rgba.2;
-        self.a[pos] = rgba.3;
-    }
-
-    pub(crate) fn get_pos(&self, x: i64, y: i64) -> usize {
-        ((y) * self.size.width as i64 + (x)) as usize
-    }
-
-    pub fn get_rgba(&self, x: i64, y: i64) -> (u8, u8, u8, u8) {
-        let pos = self.get_pos(x, y);
-        return (self.r[pos], self.g[pos], self.b[pos], self.a[pos]);
-    }
-}
+use super::init::init_freetype;
 
 /// Handy macro for producing `Err` while handling integer-type error value
 ///
@@ -109,12 +66,6 @@ pub struct FontFace {
     render_mutex: Arc<Mutex<bool>>,
 }
 
-/// Default vertical dpi for new FontFace instances
-static mut DEFAULT_VDPI: u32 = 72;
-
-/// Default horizontal dpi for new FontFace instances
-static mut DEFAULT_HDPI: u32 = 72;
-
 impl Drop for FontFace {
     fn drop(&mut self) {
         self.counter.fetch_sub(1, Ordering::Relaxed);
@@ -145,30 +96,18 @@ impl FontFace {
     /// Creates FontFace instance with raw pointer
     /// font-size is 20pt by default.
     fn from_raw_ptr(ptr: FT_Face) -> FontFace {
-        unsafe {
-            let mut face = FontFace {
-                raw_ptr: ptr,
-                vdpi: DEFAULT_VDPI,
-                hdpi: DEFAULT_HDPI,
-                font_size: 20.0,
-                counter: Arc::new(AtomicU8::new(1)),
-                render_mutex: Arc::new(Mutex::new(false)),
-            };
-            face.call_ft_set_chart_size()
-                .expect("Failed to set FontFace to default dpi/size");
+        let mut face = FontFace {
+            raw_ptr: ptr,
+            vdpi: 72,
+            hdpi: 72,
+            font_size: 20.0,
+            counter: Arc::new(AtomicU8::new(1)),
+            render_mutex: Arc::new(Mutex::new(false)),
+        };
+        face.call_ft_set_chart_size()
+            .expect("Failed to set FontFace to default dpi/size");
 
-            face
-        }
-    }
-
-    /// Sets default dpi for new FontFace instances
-    ///
-    /// This doesn't affect existing FontFace instances
-    pub fn set_default_dpi(hdpi: u32, vdpi: u32) {
-        unsafe {
-            DEFAULT_HDPI = hdpi;
-            DEFAULT_VDPI = vdpi;
-        }
+        face
     }
 
     /// Creates FontFace instance from font file
@@ -204,7 +143,7 @@ impl FontFace {
         unsafe {
             let err = FT_Set_Char_Size(
                 self.raw_ptr,
-                0,
+                (self.font_size * 64.0) as i64,
                 (self.font_size * 64.0) as i64,
                 self.hdpi,
                 self.vdpi,
@@ -228,9 +167,8 @@ impl FontFace {
         self.vdpi = vdpi;
     }
 
-    /// Renders glyph corresponding to `char` parameter
-    fn render_glpyh(&mut self, char: char) -> Result<(), i32> {
-        self.load_glpyh(char)?;
+    fn render_glpyh_with_index(&mut self, glyph_index: u32) -> Result<(), i32> {
+        self.load_glpyh_with_index(glyph_index)?;
         unsafe {
             let err = FT_Render_Glyph((*self.raw_ptr).glyph, FT_Render_Mode::FT_RENDER_MODE_LCD);
 
@@ -238,12 +176,8 @@ impl FontFace {
         }
     }
 
-    /// Loads glyph corresponding to `char` parameter without bitmap rendering
-    ///
-    /// Used when calculating font size
-    fn load_glpyh(&mut self, char: char) -> Result<(), i32> {
+    fn load_glpyh_with_index(&mut self, glyph_index: u32) -> Result<(), i32> {
         unsafe {
-            let glyph_index = FT_Get_Char_Index(self.raw_ptr, char.into());
             let err = FT_Load_Glyph(
                 self.raw_ptr,
                 glyph_index,
@@ -254,56 +188,27 @@ impl FontFace {
         }
     }
 
-    fn get_kerning(&mut self, char: char, previous_char: char) -> Result<(i64, i64), i32> {
-        let mut vector = FT_Vector_ { x: 0, y: 0 };
-
-        let err = unsafe {
-            let previous_glyph_index = FT_Get_Char_Index(self.raw_ptr, previous_char.into());
-            let current_glyph_index = FT_Get_Char_Index(self.raw_ptr, char.into());
-
-            FT_Get_Kerning(
-                self.raw_ptr,
-                previous_glyph_index,
-                current_glyph_index,
-                0, /* FT_KERNING_DEFAULT */
-                &mut vector,
-            )
-        };
-
-        println!("kering = {}", (vector).x);
-        error_if_not_zero!(err, ((vector).x, (vector).y))
-    }
-
     /// Measure size of rendered string
-    fn measure_size_without_lock(&mut self, str: &str) -> Result<StringBitmapSize, i32> {
+    fn measure_size_without_lock(&mut self, shapes: &[Shape]) -> Result<StringBitmapSize, i32> {
         let mut ymin = 0;
         let mut ymax = 0;
         let mut pen_x = 0;
-        let mut last_char_width = 0;
-        let mut last_horizontal_advance = 0;
-        let mut previous_char = None;
-        for char in str.chars() {
-            if let Some(previous_char) = previous_char {
-                pen_x += self.get_kerning(char, previous_char).unwrap().0;
-            }
-
-            self.load_glpyh(char)?;
+        for shape in shapes {
+            self.load_glpyh_with_index(shape.glyph_id)?;
             let metrics = unsafe { (*(*self.raw_ptr).glyph).metrics };
             let height = metrics.height;
             let horizontal_bearing_y = metrics.horiBearingY;
             ymin = std::cmp::max(ymin, height - horizontal_bearing_y);
             ymax = std::cmp::max(ymax, horizontal_bearing_y);
-            let advance = unsafe { (*(*self.raw_ptr).glyph).advance };
-            pen_x += advance.x;
-
-            last_horizontal_advance = advance.x;
-            last_char_width = metrics.width;
-            previous_char = Some(char);
+            let scale =
+                unsafe { (shape.scale as f64) / (*(*self.raw_ptr).size).metrics.x_ppem as f64 }
+                    * 1.2;
+            pen_x += (shape.x_advance as f64 / scale) as i64;
         }
 
         let width = pen_x/* - last_horizontal_advance + last_char_width */;
         Ok(StringBitmapSize {
-            width: (width as u64) >> 6,
+            width: (width as u64),
             height: ((ymax + ymin) as u64 >> 6) + 1,
             y_min: ymin as u64 >> 6,
             y_max: ymax as u64 >> 6,
@@ -311,43 +216,45 @@ impl FontFace {
     }
 
     /// Measure size of rendered string
-    pub fn measure_size(&mut self, str: &str) -> Result<StringBitmapSize, i32> {
+    pub fn measure_size(&mut self, shapes: &[Shape]) -> Result<StringBitmapSize, i32> {
         // Protect this method as critical section
         let mutex_cloned = self.render_mutex.clone();
         let _guard = mutex_cloned.lock();
 
         self.call_ft_set_chart_size()?;
-        self.measure_size_without_lock(str)
+        self.measure_size_without_lock(shapes)
+    }
+
+    pub fn get_ppem(&mut self) -> Result<(u16, u16), i32> {
+        self.call_ft_set_chart_size()?;
+        Ok(unsafe {
+            (
+                (*(*self.raw_ptr).size).metrics.x_ppem,
+                (*(*self.raw_ptr).size).metrics.y_ppem,
+            )
+        })
     }
 
     /// Renders string
-    pub fn render_string(&mut self, str: &str) -> Result<StringBitmap, i32> {
+    pub fn render_string(&mut self, shapes: &[Shape]) -> Result<StringBitmap, i32> {
         // Protect this method as critical section
         let mutex_cloned = self.render_mutex.clone();
         let _guard = mutex_cloned.lock();
 
         self.call_ft_set_chart_size()?;
-        let size = self.measure_size_without_lock(str)?;
+        let size = self.measure_size_without_lock(shapes)?;
 
         let mut result = StringBitmap::new(size);
         let mut pen_x: i64 = 0;
         let mut pen_y = 0;
 
-        let mut previous_char = None;
-
-        for char in str.chars() {
-            if let Some(previous_char) = previous_char {
-                println!("kerning before: {}", pen_x);
-                pen_x += self.get_kerning(char, previous_char).unwrap().0 >> 6;
-                println!("after: {}", pen_x);
-            }
-
-            self.render_glpyh(char)?;
+        for shape in shapes {
+            self.render_glpyh_with_index(shape.glyph_id)?;
             let bitmap = unsafe { (*(*self.raw_ptr).glyph).bitmap };
             let has_alpha = bitmap.pixel_mode != (FT_Pixel_Mode_::FT_PIXEL_MODE_BGRA) as u8;
 
             if bitmap.pixel_mode != (FT_Pixel_Mode_::FT_PIXEL_MODE_LCD) as u8 && has_alpha {
-                println!("Non-suppported font: No RGB/RGBA Rendering available");
+                panic!("Non-suppported font: No RGB/RGBA Rendering available");
             }
 
             let data_count_per_pixel = if has_alpha { 4 } else { 3 };
@@ -396,34 +303,19 @@ impl FontFace {
                 }
             }
 
-            let advance = unsafe { (*(*self.raw_ptr).glyph).advance };
-            pen_x += advance.x >> 6;
-            pen_y += advance.y >> 6;
-
-            previous_char = Some(char);
+            let scale =
+                unsafe { (shape.scale as f64) / (*(*self.raw_ptr).size).metrics.x_ppem as f64 }
+                    * 1.2;
+            let (x_advance, y_advance) = {
+                (
+                    (shape.x_advance as f64 / scale) as i64,
+                    (shape.y_advance as f64 / scale) as i64,
+                )
+            };
+            pen_x += x_advance;
+            pen_y += y_advance;
         }
 
         Ok(result)
     }
-}
-
-#[test]
-pub fn test_rendering() {
-    let text = "Hello, World!";
-    let mut face = FontFace::from_file("/tmp/sans.ttf", 0).unwrap();
-    face.set_dpi(300, 300);
-
-    let size = face.measure_size(text).unwrap();
-    println!("size: {} {} {}", size.width, size.y_max, size.y_min);
-
-    let result = face.render_string(text).unwrap();
-
-    let mut imgbuf = image::ImageBuffer::new(size.width as u32, size.height as u32);
-
-    for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
-        let rgba = result.get_rgba(x as i64, y as i64);
-        *pixel = image::Rgba([rgba.0, rgba.1, rgba.2, rgba.3]);
-    }
-
-    imgbuf.save("test.png").expect("Failed to save image");
 }

@@ -7,6 +7,8 @@ edition = "2021"
 
 [dependencies]
 freetype = "0.7.2"
+harfbuzz-sys = "0.6.1"
 
 [dev-dependencies]
+clap = { version = "4.5.4", features = ["derive"] }
 image = "0.25.1"
