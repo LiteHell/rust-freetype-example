@@ -45,3 +45,34 @@ impl StringBitmap {
         return (self.r[pos], self.g[pos], self.b[pos], self.a[pos]);
     }
 }
+
+#[cfg(feature = "sdl2")]
+#[macro_export]
+macro_rules! string_bitmap_to_texture {
+    ($bitmap: expr, $texture_creator: expr) => {{
+        use sdl2::pixels::PixelFormatEnum;
+
+        let mut data: Vec<u8> = vec![0; ($bitmap.size.width * $bitmap.size.height * 4) as usize];
+        for i in 0..$bitmap.size.height {
+            for j in 0..$bitmap.size.width {
+                let rgba = $bitmap.get_rgba(j as i64, i as i64);
+                let base = (i * ($bitmap.size.width * 4) + j * 4) as usize;
+                data[base] = rgba.0;
+                data[base + 1] = rgba.1;
+                data[base + 2] = rgba.2;
+                data[base + 3] = rgba.3;
+            }
+        }
+
+        let surface = sdl2::surface::Surface::from_data(
+            data.as_mut_slice(),
+            $bitmap.size.width as u32,
+            $bitmap.size.height as u32,
+            $bitmap.size.width as u32 * 4,
+            PixelFormatEnum::RGBA8888,
+        )
+        .expect("Failed to create surface");
+
+        $texture_creator.create_texture_from_surface(surface)
+    }};
+}
