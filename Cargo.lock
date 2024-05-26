@@ -445,17 +445,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "freetyper"
-version = "0.1.0"
-dependencies = [
- "clap",
- "freetype",
- "harfbuzz-sys",
- "image",
- "sdl2",
-]
-
-[[package]]
 name = "getrandom"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -957,6 +946,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05aaa8004b64fd573fc9d002f4e632d51ad4f026c2b5ba95fcb6c2f32c2c47d8"
 dependencies = [
  "bytemuck",
+]
+
+[[package]]
+name = "rust-freetype-harfbuzz-example"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "freetype",
+ "harfbuzz-sys",
+ "image",
+ "sdl2",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
 use clap::Parser;
-use freetyper::font::Font;
+use rust_freetype_harfbuzz_example::font::Font;
 
 /// Rendering example
 #[derive(Parser, Debug)]

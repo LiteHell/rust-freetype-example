@@ -1,5 +1,5 @@
 [package]
-name = "freetyper"
+name = "rust-freetype-harfbuzz-example"
 version = "0.1.0"
 edition = "2021"
 

@@ -1,5 +1,5 @@
 use clap::Parser;
-use freetyper::{bitmap::StringBitmap, font::Font, string_bitmap_to_texture};
+use rust_freetype_harfbuzz_example::{bitmap::StringBitmap, font::Font, string_bitmap_to_texture};
 use sdl2::{event::Event, keyboard::Keycode, pixels::Color, rect::Rect};
 
 /// Rendering example

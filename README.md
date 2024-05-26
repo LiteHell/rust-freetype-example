@@ -1,5 +1,5 @@
-# FreeTyper
-This is a rust simple text renderer using [FreeType](https://freetype.org) and [HarfBuzz](http://harfbuzz.github.io/).
+# FreeType/HarfBuzz example in example
+This is a rust simple text rendering example using [FreeType](https://freetype.org) and [HarfBuzz](http://harfbuzz.github.io/).
 
 ## License
 This is free and unencumbered software released into the public domain.
